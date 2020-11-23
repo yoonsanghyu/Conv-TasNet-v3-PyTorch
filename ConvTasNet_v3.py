@@ -13,11 +13,10 @@ from torch.autograd import Variable
 
 
 class Encoder(nn.Module):
-    def __init__(self, L, N, num_mic):
+    def __init__(self, L, N):
         super(Encoder, self).__init__()
         
         self.L, self.N = L, N
-        self.num_mic = num_mic
         self.conv1d_U = nn.Conv1d(1, N, kernel_size=L, stride = L//2, bias=False)
         
     def forward(self, x):
@@ -63,10 +62,8 @@ class Separator(nn.Module):
         
         self.skip = skip
         
-        
         self.LN = nn.GroupNorm(1, in_channel, eps=1e-08) # global normalization [M, N, num_mic, K] 
         self.BN = nn.Conv1d(in_channel, bn_channel, 1) # bottleneck channel [M, B, num_mic, K] 
-        
         
         self.TCN = nn.ModuleList([])
         for i in range(stack):
@@ -77,9 +74,7 @@ class Separator(nn.Module):
             self.out = nn.Sequential(nn.PReLU(), nn.Conv1d(skip, out_channel, 1))
         else:
             self.out = nn.Sequential(nn.PReLU(), nn.Conv1d(bn_channel, out_channel, 1))               
-                
-        
-        
+
     def forward(self, x):
         
         out = self.BN(self.LN(x))
@@ -96,7 +91,6 @@ class Separator(nn.Module):
             for i in range(len(self.TCN)):
                 residual = self.TCN[i](out)
                 out = residual + out
-                
         
         if self.skip:
             out = self.out(skip_connection)
@@ -119,12 +113,12 @@ class ConvTasNet(nn.Module):
             X: Number of convolutional blocks in each repeat
             R: Number of repeats
             C: Number of speakers
-            norm_type: BN, gLN, cLN
-            causal: causal or non-causal
-            mask_nonlinear: use which non-linear function to generate mask
+            #norm_type: BN, gLN, cLN
+            #causal: causal or non-causal
+            #mask_nonlinear: use which non-linear function to generate mask
     """
 
-    def __init__(self, N=512, L=32, B=128, Sc=128, H=512, X=8, R=3, P=3, C=2, num_mic=6):
+    def __init__(self, N=512, L=32, B=128, Sc=128, H=512, X=8, R=3, P=3, C=2):
         super(ConvTasNet, self).__init__()
         
         self.C = C
@@ -140,7 +134,7 @@ class ConvTasNet(nn.Module):
         self.X = X
         self.R = R
         
-        self.encoder = Encoder(L, N, num_mic)
+        self.encoder = Encoder(L, N)
         self.separator = Separator(in_channel=N, out_channel=N*C, bn_channel=B, hidden_channel=H, kernel=P, layer=X, stack=R, skip=Sc)
         self.decoder = nn.ConvTranspose1d(N, 1, L, bias=False, stride=L//2)
 
